@@ -160,6 +160,7 @@ type Api =
                                       WithStatus 301 Text]
   :<|> "uverb-get-created" :> UVerb 'GET '[PlainText] '[WithStatus 201 Person]
   :<|> NamedRoutes RecordRoutes
+  :<|> "param-verbatim" :> Capture "payload" Verbatim :> Get '[JSON] Person
 
 api :: Proxy Api
 api = Proxy
@@ -190,6 +191,7 @@ uverbGetSuccessOrRedirect :: Bool
                                               WithStatus 301 Text])
 uverbGetCreated :: ClientM (Union '[WithStatus 201 Person])
 recordRoutes :: RecordRoutes (AsClientT ClientM)
+getParamVerbatim :: Verbatim -> ClientM Person
 
 getRoot
   :<|> getGet
@@ -214,7 +216,9 @@ getRoot
   :<|> EmptyClient
   :<|> uverbGetSuccessOrRedirect
   :<|> uverbGetCreated
-  :<|> recordRoutes = client api
+  :<|> recordRoutes
+  :<|> getParamVerbatim
+  = client api
 
 server :: Application
 server = serve api (
@@ -259,6 +263,10 @@ server = serve api (
              { something = pure ["foo", "bar", "pweet"]
              }
          }
+  :<|> (\ what -> case unVerbatim what of
+                   "%2A" -> return carol
+                   "*" -> return alice
+                   other -> throwError $ ServerError 400 (Text.unpack (decodeUtf8 other) ++ " not found") "" [])
   )
 
 -- * api for testing failures
@@ -370,3 +378,13 @@ instance ToHttpApiData UrlEncodedByteString where
 
 instance FromHttpApiData UrlEncodedByteString where
     parseUrlPiece = pure . UrlEncodedByteString . HTTP.urlDecode True . encodeUtf8
+
+
+newtype Verbatim = Verbatim { unVerbatim :: ByteString }
+
+instance ToHttpApiData Verbatim where
+    toEncodedUrlPiece = byteString . unVerbatim
+    toUrlPiece = decodeUtf8 . unVerbatim
+
+instance FromHttpApiData Verbatim where
+    parseUrlPiece = pure . Verbatim . encodeUtf8

@@ -196,3 +196,7 @@ successSpec = beforeAll (startWaiApp server) $ afterAll endWaiApp $ do
         case eitherResponse of
           Left clientError -> fail $ show clientError
           Right response -> matchUnion response `shouldBe` Just (WithStatus @201 carol)
+
+    describe "Verbatim" $ do
+      it "passes characters verbatim" $ \(_, baseUrl) -> do
+        left show <$> runClient (getParamVerbatim (Verbatim "*")) baseUrl  `shouldReturn` Right alice
